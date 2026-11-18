@@ -30,10 +30,13 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.environ.get("LAYERS_DATA", ROOT / "data"))
 WEB = ROOT / "web"
 MAX_UPLOAD = 100 * 1024 * 1024  # Cloudflare's request body limit on the free plan
-# When set, /api requests must carry this value in X-Layers-Key (the website's
-# Worker adds it), so the tunnel's own hostname can't be used directly.
+# When set, /api and /demo requests must carry this value in X-Layers-Key (the
+# website's Worker adds it), so the tunnel's own hostname can't be used directly.
 KEY = os.environ.get("LAYERS_KEY", "")
 AUDIO_EXT = {".mp3", ".m4a", ".aac", ".mp4", ".wav", ".flac", ".ogg", ".oga", ".opus", ".aif", ".aiff", ".webm"}
+# The public example song: data/demo/out (pipeline output) plus data/demo/demo.json
+# ({"name": ..., "credit": {"text", "url", "license", "license_url"}}).
+DEMO = DATA / "demo"
 ID_RE = re.compile(r"^[0-9a-f]{12}$")
 FILE_RE = re.compile(r"^[a-z0-9-]+\.(mp3|bin|json)$")
 
@@ -180,6 +183,28 @@ async def song_file(request: Request) -> Response:
     return FileResponse(p, headers={"Cache-Control": "private, max-age=86400"})
 
 
+async def me(request: Request) -> Response:
+    # Reaching this at all means the caller may use the private API.
+    return JSONResponse({"ok": True})
+
+
+async def demo(request: Request) -> Response:
+    res = DEMO / "out" / "result.json"
+    if not res.exists():
+        return JSONResponse({"error": "No demo."}, status_code=404)
+    info = json.loads((DEMO / "demo.json").read_text()) if (DEMO / "demo.json").exists() else {}
+    return JSONResponse({"id": "demo", "state": "done", "demo": True, **info, "result": json.loads(res.read_text())},
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+
+async def demo_file(request: Request) -> Response:
+    name = request.path_params["name"]
+    p = DEMO / "out" / name
+    if not FILE_RE.match(name) or not p.exists():
+        return JSONResponse({"error": "Not found."}, status_code=404)
+    return FileResponse(p, headers={"Cache-Control": "public, max-age=86400"})
+
+
 class RequireKey:
     """Reject /api requests without the shared key, when one is configured."""
 
@@ -187,7 +212,7 @@ class RequireKey:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if KEY and scope["type"] == "http" and scope["path"].startswith("/api"):
+        if KEY and scope["type"] == "http" and scope["path"].startswith(("/api", "/demo")):
             got = dict(scope["headers"]).get(b"x-layers-key", b"").decode("latin-1")
             if not hmac.compare_digest(got, KEY):
                 await JSONResponse({"error": "Forbidden."}, status_code=403)(scope, receive, send)
@@ -196,6 +221,9 @@ class RequireKey:
 
 
 app = Starlette(routes=[
+    Route("/api/me", me, methods=["GET"]),
+    Route("/demo", demo, methods=["GET"]),
+    Route("/demo/files/{name}", demo_file, methods=["GET"]),
     Route("/api/songs", list_songs, methods=["GET"]),
     Route("/api/songs", upload, methods=["POST"]),
     Route("/api/songs/{sid}", get_song, methods=["GET"]),

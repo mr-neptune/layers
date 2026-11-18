@@ -3,6 +3,6 @@ credentials-file: /home/YOU/.cloudflared/<tunnel-id>.json
 ingress:
   # Only the API is exposed; the page itself is served by the website.
   - hostname: layers-origin.example.com
-    path: ^/api/
+    path: ^/(api|demo)(/|$)
     service: http://127.0.0.1:8020
   - service: http_status:404

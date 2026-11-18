@@ -52,6 +52,13 @@ h1 .bars i{display:block;width:22px;height:4px;border-radius:2px}
 .prog{grid-column:1/-1;height:5px;border-radius:9px;background:rgba(255,255,255,.07);overflow:hidden}
 .prog i{display:block;height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .4s}
 .empty{color:var(--faint);font-size:14px;margin:12px 2px 0}
+.guest{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;color:var(--dim);font-size:14px}
+.guest strong{color:var(--ink)}
+.guest div{flex:1 1 280px}
+a.btn{text-decoration:none}
+.credit{margin:8px 0 0;font-size:12.5px;color:var(--faint)}
+.credit a{color:var(--dim)}
+.song .tag{font-size:11px;font-weight:600;color:#1a1530;background:var(--accent2);border-radius:99px;padding:1px 7px;margin-left:8px;vertical-align:2px}
 
 /* song view */
 #view{margin-top:18px}
@@ -109,7 +116,14 @@ footer p{margin:4px 0}
   </header>
   <p class="sub">Drop in a song and hear what it's made of. A neural network separates the instruments, and the Fourier transform shows the sound's building blocks. Play any layer on its own.</p>
 
-  <section class="card" aria-labelledby="lib-h">
+  <section class="card guest" id="guest" hidden>
+    <div>
+      <strong>Listening to an example.</strong> Uploading your own songs is limited to the owner of this site, because separation runs on a home server.
+    </div>
+    <a class="btn" id="signin" href="api/login">Sign in to upload</a>
+  </section>
+
+  <section class="card" aria-labelledby="lib-h" id="library" hidden>
     <h2 id="lib-h" class="sr">Your songs</h2>
     <label class="drop" id="drop" tabindex="0">
       <input type="file" id="file" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.opus,.aiff" hidden>
@@ -125,6 +139,7 @@ footer p{margin:4px 0}
       <div>
         <h2 id="title"></h2>
         <div class="facts" id="facts"></div>
+        <p class="credit" id="credit" hidden></p>
       </div>
     </div>
     <div class="seg" role="tablist" id="tabs" aria-label="Layer view"></div>
@@ -145,7 +160,7 @@ footer p{margin:4px 0}
 
   <footer>
     <p>Instrument separation: <a href="https://github.com/adefossez/demucs">Demucs</a> (htdemucs_6s, MIT license) by Alexandre Défossez / Meta AI. Harmonic/percussive split: median-filtering method by Derry FitzGerald (2010).</p>
-    <p>Everything runs on this server. Songs and their layers stay private.</p>
+    <p>Separation runs on a home server. Uploaded songs and their layers stay private; only the example is public. <a href="https://github.com/mr-neptune/layers">Source</a></p>
   </footer>
 </div>
 
@@ -174,18 +189,22 @@ footer p{margin:4px 0}
   ];
 
   // ---------- library ----------
-  var songs = [], current = null, pollTimer = null;
+  var songs = [], current = null, pollTimer = null, signedIn = false, demo = null;
+
+  function songUrl(id) { return id === 'demo' ? 'demo' : 'api/songs/' + id; }
+  function fileUrl(name) { return (current.id === 'demo' ? 'demo/files/' : 'api/songs/' + current.id + '/files/') + name; }
 
   function fmt(t) { t = Math.max(0, t); var m = Math.floor(t / 60), s = Math.floor(t % 60); return m + ':' + (s < 10 ? '0' : '') + s; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
 
   function loadSongs() {
+    if (!signedIn) { renderSongs(); return Promise.resolve(); }
     return fetch('api/songs').then(function (r) { return r.json(); }).then(function (list) {
       songs = list; renderSongs();
       clearTimeout(pollTimer);
       if (list.some(function (s) { return s.state === 'queued' || s.state === 'processing'; })) pollTimer = setTimeout(loadSongs, 1500);
       var want = location.hash.slice(1);
-      if (want && (!current || current.id !== want)) {
+      if (want && want !== 'demo' && (!current || current.id !== want)) {
         var s = list.find(function (x) { return x.id === want; });
         if (s && s.state === 'done') openSong(want);
       }
@@ -195,8 +214,9 @@ footer p{margin:4px 0}
   function renderSongs() {
     var ul = $('songs');
     ul.innerHTML = '';
-    if (!songs.length) { ul.innerHTML = '<li class="empty">No songs yet.</li>'; return; }
-    songs.forEach(function (s) {
+    var all = (demo ? [demo] : []).concat(songs);
+    if (!all.length) { ul.innerHTML = '<li class="empty">No songs yet.</li>'; return; }
+    all.forEach(function (s) {
       var li = document.createElement('li');
       li.className = 'song' + (current && current.id === s.id ? ' sel' : '');
       var meta = '';
@@ -204,9 +224,10 @@ footer p{margin:4px 0}
       else if (s.state === 'failed') meta = 'Failed: ' + esc(s.error || 'unknown error');
       else if (s.state === 'queued') meta = 'Waiting in line…';
       else meta = esc(s.stage || 'Working') + ' · ' + Math.round((s.progress || 0) * 100) + '%';
-      li.innerHTML = '<span class="nm">' + esc(s.name) + '</span>' +
+      if (s.demo) meta = 'Public example';
+      li.innerHTML = '<span class="nm">' + esc(s.name) + (s.demo ? '<span class="tag">Example</span>' : '') + '</span>' +
         '<span class="meta' + (s.state === 'failed' ? ' err' : '') + '">' + meta + '</span>' +
-        '<button class="x" aria-label="Delete ' + esc(s.name) + '" title="Delete">✕</button>' +
+        (s.demo ? '' : '<button class="x" aria-label="Delete ' + esc(s.name) + '" title="Delete">✕</button>') +
         (s.state === 'processing' || s.state === 'queued' ? '<div class="prog"><i style="width:' + Math.round((s.progress || 0) * 100) + '%"></i></div>' : '');
       li.tabIndex = 0;
       li.addEventListener('click', function (e) {
@@ -214,7 +235,7 @@ footer p{margin:4px 0}
         if (s.state === 'done') { location.hash = s.id; openSong(s.id); }
       });
       li.addEventListener('keydown', function (e) { if (e.key === 'Enter' && s.state === 'done') { location.hash = s.id; openSong(s.id); } });
-      li.querySelector('.x').addEventListener('click', function () {
+      if (!s.demo) li.querySelector('.x').addEventListener('click', function () {
         if (s.state === 'processing') { alert('This song is still being processed.'); return; }
         if (!confirm('Delete "' + s.name + '" and its layers?')) return;
         fetch('api/songs/' + s.id, { method: 'DELETE' }).then(function () {
@@ -335,7 +356,7 @@ footer p{margin:4px 0}
     });
     applyGains();
     return Promise.all(list.map(function (n) {
-      return fetch('api/songs/' + current.id + '/files/' + fileOf(n))
+      return fetch(fileUrl(fileOf(n)))
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
         .then(function (buf) { return new Promise(function (res, rej) { ac.decodeAudioData(buf, res, rej); }); })
         .then(function (ab) {
@@ -363,7 +384,7 @@ footer p{margin:4px 0}
     var set = view.set, key = current.id + ':' + set;
     var info = current.result.spec;
     var all = set === 'mix' ? ['mix'] : current.result.layers[set].map(function (l) { return l.name; });
-    var p = specCache[key] || (specCache[key] = fetch('api/songs/' + current.id + '/files/spec-' + set + '.bin')
+    var p = specCache[key] || (specCache[key] = fetch(fileUrl('spec-' + set + '.bin'))
       .then(function (r) { return r.arrayBuffer(); })
       .then(function (buf) {
         var u = new Uint8Array(buf), per = info.frames * info.bins, out = {};
@@ -468,16 +489,20 @@ footer p{margin:4px 0}
 
   // ---------- song view ----------
   function openSong(id) {
-    fetch('api/songs/' + id).then(function (r) { return r.json(); }).then(function (s) {
+    fetch(songUrl(id)).then(function (r) { return r.json(); }).then(function (s) {
       if (!s.result) return;
       if (P.playing) pause();
       current = s; P.offset = 0; layerState = {}; spec = null;
       $('view').hidden = false;
-      $('title').textContent = s.result.title ? s.result.title + (s.result.artist ? ' · ' + s.result.artist : '') : s.name;
+      var title = s.title || s.result.title, artist = s.artist || s.result.artist;
+      $('title').textContent = title ? title + (artist ? ' · ' + artist : '') : s.name;
       var facts = '<span class="fact"><b>' + fmt(s.result.duration) + '</b> long</span>';
       if (s.result.tempo) facts += '<span class="fact">about <b>' + Math.round(s.result.tempo) + ' BPM</b></span>';
       if (s.result.key) facts += '<span class="fact">probably <b>' + s.result.key.tonic + ' ' + s.result.key.mode + '</b></span>';
       $('facts').innerHTML = facts;
+      var cr = s.credit;
+      $('credit').hidden = !cr;
+      if (cr) $('credit').innerHTML = 'Example song: <a href="' + esc(cr.url) + '">' + esc(cr.text) + '</a>, licensed under <a href="' + esc(cr.license_url) + '">' + esc(cr.license) + '</a>. Separated into layers by this tool.';
       if ('mediaSession' in navigator && window.MediaMetadata) try { navigator.mediaSession.metadata = new MediaMetadata({ title: $('title').textContent, artist: 'Layers' }); } catch (e) {}
       renderSongs();
       selectView(view.id);
@@ -565,7 +590,7 @@ footer p{margin:4px 0}
   (function loop() { if (P.playing) tickUI(); requestAnimationFrame(loop); })();
 
   document.addEventListener('keydown', function (e) {
-    if (!current || $('play').disabled || e.target.closest('input,button,select,textarea,label')) return;
+    if (!current || $('play').disabled || e.target.closest('input,button,select,textarea,label,a')) return;
     if (e.key === ' ') { e.preventDefault(); P.playing ? pause() : play(); }
     else if (e.key === 'ArrowRight') seek(now() + 5);
     else if (e.key === 'ArrowLeft') seek(now() - 5);
@@ -574,7 +599,22 @@ footer p{margin:4px 0}
   window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(function () { if (spec) { paintSpec(); drawStrips(); } }, 120); });
   window.addEventListener('hashchange', function () { var id = location.hash.slice(1); if (id && (!current || current.id !== id)) openSong(id); });
 
-  loadSongs();
+  // Signed in (or running locally) means the private API answers. Behind
+  // Cloudflare Access an anonymous request is redirected to the login page.
+  Promise.all([
+    fetch('api/me', { redirect: 'manual', credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { return !!(j && j.ok); })
+      .catch(function () { return false; }),
+    fetch('demo').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+  ]).then(function (res) {
+    signedIn = res[0];
+    demo = res[1] && res[1].result ? { id: 'demo', name: res[1].name || 'Example', state: 'done', demo: true } : null;
+    $('library').hidden = !signedIn;
+    $('guest').hidden = signedIn;
+    loadSongs();
+    var want = location.hash.slice(1);
+    if (!signedIn || !want || want === 'demo') { if (demo) openSong('demo'); }
+  });
 })();
 </script>
 </body>
