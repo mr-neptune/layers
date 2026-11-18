@@ -10,6 +10,8 @@ After=network-online.target
 WorkingDirectory=%h/projects/layers
 ExecStart=%h/projects/layers/.venv/bin/python -m layers.server
 Environment=LAYERS_HOST=127.0.0.1 LAYERS_PORT=8020
+# LAYERS_KEY=... (the shared key the website's Worker sends)
+EnvironmentFile=-%h/.config/layers/env
 Restart=on-failure
 Nice=5
 

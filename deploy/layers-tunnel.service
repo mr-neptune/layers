@@ -1,0 +1,12 @@
+# Cloudflare Tunnel for Layers. Config: ~/.cloudflared/layers.yml (see deploy/tunnel.example.yml).
+[Unit]
+Description=Cloudflare Tunnel for Layers
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/cloudflared --no-autoupdate tunnel --config %h/.cloudflared/layers.yml run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
