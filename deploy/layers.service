@@ -1,0 +1,17 @@
+# systemd user service. Install:
+#   cp deploy/layers.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now layers
+# To keep it running without a login session: sudo loginctl enable-linger $USER
+[Unit]
+Description=Layers: split songs into instrument and Fourier layers
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/projects/layers
+ExecStart=%h/projects/layers/.venv/bin/python -m layers.server
+Environment=LAYERS_HOST=127.0.0.1 LAYERS_PORT=8020
+Restart=on-failure
+Nice=5
+
+[Install]
+WantedBy=default.target
