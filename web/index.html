@@ -77,7 +77,7 @@ a.btn{text-decoration:none}
 .transport{display:flex;align-items:center;gap:12px;margin:16px 0 10px;flex-wrap:wrap}
 .time{font:13px var(--mono);color:var(--dim);min-width:96px}
 .loading{font-size:13px;color:var(--dim)}
-.spec{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#050816;cursor:pointer;touch-action:none}
+.spec{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#050816;cursor:pointer}
 .spec canvas{display:block;width:100%;height:220px}
 .spec .hz{position:absolute;left:6px;font:10px var(--mono);color:rgba(255,255,255,.45);pointer-events:none;transform:translateY(-50%)}
 .head{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;box-shadow:0 0 8px rgba(255,255,255,.7);pointer-events:none;left:0}
@@ -92,7 +92,7 @@ a.btn{text-decoration:none}
 .mini{border:1px solid var(--line);background:none;border-radius:7px;width:30px;height:30px;font-size:12px;font-weight:700;cursor:pointer;color:var(--dim);flex:none}
 .mini[aria-pressed=true].m{background:var(--bad);color:#1a1530;border-color:transparent}
 .mini[aria-pressed=true].s{background:var(--accent);color:#1a1530;border-color:transparent}
-.strip{position:relative;height:38px;border-radius:8px;overflow:hidden;background:rgba(0,0,0,.25);cursor:pointer;touch-action:none}
+.strip{position:relative;height:38px;border-radius:8px;overflow:hidden;background:rgba(0,0,0,.25);cursor:pointer}
 .strip canvas{display:block;width:100%;height:100%}
 .vol{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--faint)}
 .vol input{flex:1;accent-color:var(--accent)}
@@ -344,6 +344,8 @@ footer p{margin:4px 0}
   function loadView() {
     var token = ++P.loadToken, wasPlaying = P.playing, at = now();
     if (P.playing) { P.offset = at; P.playing = false; stopSources(); setPlay(); }
+    // Let the previous view's layers be freed before decoding the next ones.
+    Object.keys(P.gains).forEach(function (k) { try { P.gains[k].disconnect(); } catch (e) {} });
     P.buffers = {}; P.gains = {};
     $('play').disabled = true;
     var list = names();
@@ -564,12 +566,15 @@ footer p{margin:4px 0}
     applyGains();
   });
 
+  // Jump on a tap or click. Scrolling past the strips on a phone must not seek,
+  // so touch only seeks on a clean tap (the click event). A mouse can also drag.
   function seekable(el) {
     var drag = false;
     function at(e) { var r = el.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * P.duration); }
-    el.addEventListener('pointerdown', function (e) { if (!P.duration) return; drag = true; el.setPointerCapture(e.pointerId); at(e); });
+    el.addEventListener('click', function (e) { if (P.duration) at(e); });
+    el.addEventListener('pointerdown', function (e) { if (e.pointerType === 'mouse' && P.duration) { drag = true; el.setPointerCapture(e.pointerId); } });
     el.addEventListener('pointermove', function (e) { if (drag && !P.playing) at(e); });
-    el.addEventListener('pointerup', function (e) { if (drag && P.playing) at(e); drag = false; });
+    el.addEventListener('pointerup', function () { drag = false; });
   }
   seekable($('spec'));
 
