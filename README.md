@@ -53,7 +53,7 @@ The site's Worker serves `web/` at `/layers/` and forwards to this server throug
 
 `/api/me` tells the page whether the private API is reachable. See `deploy/`.
 
-Settings (environment variables): `LAYERS_HOST` (default `127.0.0.1`), `LAYERS_PORT` (default `8020`), `LAYERS_DATA` (default `./data`).
+Settings (environment variables): `LAYERS_HOST` (default `127.0.0.1`), `LAYERS_PORT` (default `8020`), `LAYERS_DATA` (default `./data`), and `LAYERS_KEY` (when set, `/api` and `/demo` require it in the `X-Layers-Key` header).
 
 ## Use files you own
 
