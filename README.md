@@ -34,6 +34,25 @@ Or process one file from the command line:
 
 On a 6-core laptop CPU a 3-minute song takes about 2.5 minutes and up to 4 GB of RAM. The Demucs weights (about 80 MB) download on first use.
 
+### Example song
+
+The page plays a public example when `data/demo/out/` exists (`python -m layers.pipeline example.mp3 data/demo/out`), with `data/demo/demo.json` giving its name and credit:
+
+```json
+{"name": "…", "title": "…", "artist": "…", "credit": {"text": "…", "url": "…", "license": "CC BY 4.0", "license_url": "…"}}
+```
+
+Use a song whose license allows sharing derivatives. The live example is Kevin MacLeod's "Local Forecast – Elevator" (CC BY 4.0).
+
+### Behind wayne-wen.dev
+
+The site's Worker serves `web/` at `/layers/` and forwards to this server through a Cloudflare Tunnel, adding the shared `LAYERS_KEY`:
+
+- `/layers/demo*` is public and cached at the edge.
+- `/layers/api/*` sits behind Cloudflare Access, and the Worker verifies the Access token again.
+
+`/api/me` tells the page whether the private API is reachable. See `deploy/`.
+
 Settings (environment variables): `LAYERS_HOST` (default `127.0.0.1`), `LAYERS_PORT` (default `8020`), `LAYERS_DATA` (default `./data`).
 
 ## Use files you own

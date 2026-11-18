@@ -232,9 +232,9 @@ footer p{margin:4px 0}
       li.tabIndex = 0;
       li.addEventListener('click', function (e) {
         if (e.target.closest('.x')) return;
-        if (s.state === 'done') { location.hash = s.id; openSong(s.id); }
+        if (s.state === 'done') { location.hash = s.id; openSong(s.id, true); }
       });
-      li.addEventListener('keydown', function (e) { if (e.key === 'Enter' && s.state === 'done') { location.hash = s.id; openSong(s.id); } });
+      li.addEventListener('keydown', function (e) { if (e.key === 'Enter' && s.state === 'done') { location.hash = s.id; openSong(s.id, true); } });
       if (!s.demo) li.querySelector('.x').addEventListener('click', function () {
         if (s.state === 'processing') { alert('This song is still being processed.'); return; }
         if (!confirm('Delete "' + s.name + '" and its layers?')) return;
@@ -488,7 +488,7 @@ footer p{margin:4px 0}
   }
 
   // ---------- song view ----------
-  function openSong(id) {
+  function openSong(id, scroll) {
     fetch(songUrl(id)).then(function (r) { return r.json(); }).then(function (s) {
       if (!s.result) return;
       if (P.playing) pause();
@@ -506,7 +506,7 @@ footer p{margin:4px 0}
       if ('mediaSession' in navigator && window.MediaMetadata) try { navigator.mediaSession.metadata = new MediaMetadata({ title: $('title').textContent, artist: 'Layers' }); } catch (e) {}
       renderSongs();
       selectView(view.id);
-      $('view').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (scroll) $('view').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
   function closeSong() {
